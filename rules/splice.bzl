@@ -27,9 +27,6 @@ def _bitstream_splice_impl(ctx):
         arguments = [gen_mem_img_args],
         executable = tc.tools.gen_mem_image,
         use_default_shell_env = True,
-        execution_requirements = {
-            "no-sandbox": "",
-        },
     )
 
     # Vivado's `updatemem` only accepts bitstream filenames that end with
@@ -58,9 +55,6 @@ def _bitstream_splice_impl(ctx):
         arguments = [updatemem_args],
         executable = "updatemem",
         use_default_shell_env = False,
-        execution_requirements = {
-            "no-sandbox": "",
-        },
         env = dicts.add(
             ENV,
             {
