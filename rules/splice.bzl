@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
-load("@nonhermetic//:env.bzl", "ENV")
+load("@bazel_skylib//lib:dicts.bzl", "dicts")
+load("@nonhermetic//:env.bzl", "BIN_PATHS", "ENV")
 load("//rules/opentitan:toolchain.bzl", "LOCALTOOLS_TOOLCHAIN")
 
 """Rules for memory splicing with Vivado.
@@ -60,7 +61,12 @@ def _bitstream_splice_impl(ctx):
         execution_requirements = {
             "no-sandbox": "",
         },
-        env = ENV,
+        env = dicts.add(
+            ENV,
+            {
+                "PATH": BIN_PATHS["updatemem"] + ":/bin:/usr/bin:/usr/local/bin",
+            },
+        ),
     )
 
     if ctx.attr.update_usr_access:
