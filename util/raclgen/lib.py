@@ -2,11 +2,12 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
-import hjson
 import logging
 import sys
-from typing import Dict
-from typing import Optional
+from collections import OrderedDict
+from typing import Dict, Optional, Tuple, List
+
+import hjson
 from reggen.ip_block import IpBlock
 from reggen.validate import check_keys
 
@@ -69,7 +70,8 @@ def parse_racl_config(config_path: str) -> Dict[str, object]:
             policy['wr_default'] = compute_policy_value('allowed_wr')
             if policy.get('rot_private'):
                 if rot_private_policy:
-                    raise ValueError('Only one policy can be the ROT_PRIVATE policy')
+                    raise ValueError(
+                        'Only one policy can be the ROT_PRIVATE policy')
                 rot_private_policy = policy
 
     if not rot_private_policy:
@@ -82,11 +84,13 @@ def parse_racl_config(config_path: str) -> Dict[str, object]:
     return racl_config
 
 
-def parse_racl_mapping(racl_config: Dict[str, object], mapping_path: str,
-                       if_name: Optional[str],
-                       ip_block: IpBlock) -> Dict[str, int]:
+def parse_racl_mapping(
+        racl_config: Dict[str,
+                          object], mapping_path: str, if_name: Optional[str],
+        ip_block: IpBlock) -> Tuple[OrderedDict[str, int], str, List[str]]:
+
     mapping = _read_hjson(mapping_path)
-    parsed_register_mapping = {}
+    parsed_register_mapping = OrderedDict()
 
     # Mapping must be a dict with a single entry:
     # RACL_GROUP => register mapping
@@ -99,24 +103,21 @@ def parse_racl_mapping(racl_config: Dict[str, object], mapping_path: str,
         raise SystemExit('RACL group must be a string')
     if not isinstance(register_mapping, dict):
         raise SystemExit('Register mapping must be a a dict')
+    if racl_group not in racl_config['policies']:
+        raise SystemExit(f'RACL group {racl_group} not defined in RACL config')
+
+    policy_names = [
+        policy['name'] for policy in racl_config['policies'][racl_group]
+    ]
 
     # Special handling of the all star assignment:
     # "*": POLICY
     # Assigns all registers to a given policy
     if list(register_mapping.keys()) == ["*"]:
         policy_name = register_mapping["*"]
-
-        if racl_group not in racl_config['policies']:
-            raise SystemExit(
-                f'RACL group {racl_group} not defined in RACL config')
-
-        policy_idx = -1
-        for idx, policy in enumerate(racl_config['policies'][racl_group]):
-            if policy['name'] == policy_name:
-                policy_idx = idx
-                break
-
-        if policy_idx == -1:
+        try:
+            policy_idx = policy_names.index(policy_name)
+        except ValueError:
             raise SystemExit(
                 f'RACL policy {policy_name} not defined in RACL config '
                 f'for group {racl_group}')
@@ -124,8 +125,7 @@ def parse_racl_mapping(racl_config: Dict[str, object], mapping_path: str,
         reg_block = ip_block.reg_blocks.get(if_name)
         if not reg_block:
             raise SystemExit(
-                f"Register interface {if_name} not defined in in {ip_block['name']}"
-            )
+                f"Register interface {if_name} not defined in {ip_block.name}")
 
         for reg in reg_block.flat_regs:
             parsed_register_mapping[reg.name] = policy_idx
@@ -133,4 +133,4 @@ def parse_racl_mapping(racl_config: Dict[str, object], mapping_path: str,
         # General case not yet implemented
         assert False
 
-    return parsed_register_mapping
+    return parsed_register_mapping, racl_group, policy_names
